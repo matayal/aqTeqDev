@@ -13,16 +13,16 @@ while ! state_done OBJECT_STORE_BUCKET; do
 done
 
 
-# Wait for DATABASE1 DB OCID
-while ! state_done DATABASE1_DB_OCID; do
-  echo "`date`: Waiting for DATABASE1_DB_OCID"
+# Wait for Order DB OCID
+while ! state_done ORDER_DB_OCID; do
+  echo "`date`: Waiting for ORDER_DB_OCID"
   sleep 2
 done
 
 
-# Wait for database2 DB OCID
-while ! state_done DATABASE2_DB_OCID; do
-  echo "`date`: Waiting for DATABASE2_DB_OCID"
+# Wait for Inventory DB OCID
+while ! state_done INVENTORY_DB_OCID; do
+  echo "`date`: Waiting for INVENTORY_DB_OCID"
   sleep 2
 done
 
@@ -32,7 +32,7 @@ while ! state_done WALLET_GET; do
   cd $GRABDISH_HOME
   mkdir wallet
   cd wallet
-  oci db autonomous-database generate-wallet --autonomous-database-id "$(state_get DATABASE1_DB_OCID)" --file 'wallet.zip' --password 'Welcome1' --generate-type 'ALL'
+  oci db autonomous-database generate-wallet --autonomous-database-id "$(state_get ORDER_DB_OCID)" --file 'wallet.zip' --password 'Welcome1' --generate-type 'ALL'
   unzip wallet.zip
   cd $GRABDISH_HOME
   state_set_done WALLET_GET
@@ -62,7 +62,7 @@ while ! state_done DB_PASSWORD; do
 done
 
 
-# Create database2 ATP Bindings
+# Create Inventory ATP Bindings
 while ! state_done DB_WALLET_SECRET; do
   cd $GRABDISH_HOME/wallet
   cat - >sqlnet.ora <<!
@@ -99,14 +99,14 @@ cat - >$TNS_ADMIN/sqlnet.ora <<!
 WALLET_LOCATION = (SOURCE = (METHOD = file) (METHOD_DATA = (DIRECTORY="$TNS_ADMIN")))
 SSL_SERVER_DN_MATCH=yes
 !
-DATABASE1_DB_SVC="$(state_get DATABASE1_DB_NAME)_tp"
-DATABASE2_DB_SVC="$(state_get DATABASE2_DB_NAME)_tp"
-DATABASE1_USER=DATABASE1USER
-DATABASE2_USER=DATABASE2USER
-DATABASE1_LINK=DATABASE1TODATABASE2LINK
-DATABASE2_LINK=DATABASE2TODATABASE1LINK
-DATABASE1_QUEUE=DATABASE1QUEUE
-DATABASE2_QUEUE=DATABASE2QUEUE
+ORDER_DB_SVC="$(state_get ORDER_DB_NAME)_tp"
+INVENTORY_DB_SVC="$(state_get INVENTORY_DB_NAME)_tp"
+ORDER_USER=ORDERUSER
+INVENTORY_USER=INVENTORYUSER
+ORDER_LINK=ORDERTOINVENTORYLINK
+INVENTORY_LINK=INVENTORYTOORDERLINK
+ORDER_QUEUE=ORDERQUEUE
+INVENTORY_QUEUE=INVENTORYQUEUE
 
 
 # Get DB Password
@@ -121,17 +121,17 @@ while true; do
 done
 
 
-# Wait for DB Password to be set in DATABASE1 DB
-while ! state_done DATABASE1_DB_PASSWORD_SET; do
-  echo "`date`: Waiting for DATABASE1_DB_PASSWORD_SET"
+# Wait for DB Password to be set in Order DB
+while ! state_done ORDER_DB_PASSWORD_SET; do
+  echo "`date`: Waiting for ORDER_DB_PASSWORD_SET"
   sleep 2
 done
 
 
-# DATABASE1 DB User, Objects
-while ! state_done DATABASE1_USER; do
-  U=$DATABASE1_USER
-  SVC=$DATABASE1_DB_SVC
+# Order DB User, Objects
+while ! state_done ORDER_USER; do
+  U=$ORDER_USER
+  SVC=$ORDER_DB_SVC
   sqlplus /nolog <<!
 WHENEVER SQLERROR EXIT 1
 connect admin/"$DB_PASSWORD"@$SVC
@@ -152,50 +152,50 @@ connect $U/"$DB_PASSWORD"@$SVC
 
 BEGIN
 DBMS_AQADM.CREATE_QUEUE_TABLE (
-queue_table          => 'DATABASE1QUEUETABLE',
+queue_table          => 'ORDERQUEUETABLE',
 queue_payload_type   => 'SYS.AQ\$_JMS_TEXT_MESSAGE',
 multiple_consumers   => true,
 compatible           => '8.1');
 
 DBMS_AQADM.CREATE_QUEUE (
-queue_name          => '$DATABASE1_QUEUE',
-queue_table         => 'DATABASE1QUEUETABLE');
+queue_name          => '$ORDER_QUEUE',
+queue_table         => 'ORDERQUEUETABLE');
 
 DBMS_AQADM.START_QUEUE (
-queue_name          => '$DATABASE1_QUEUE');
+queue_name          => '$ORDER_QUEUE');
 END;
 /
 
 BEGIN
 DBMS_AQADM.CREATE_QUEUE_TABLE (
-queue_table          => 'DATABASE2QUEUETABLE',
+queue_table          => 'INVENTORYQUEUETABLE',
 queue_payload_type   => 'SYS.AQ\$_JMS_TEXT_MESSAGE',
 compatible           => '8.1');
 
 DBMS_AQADM.CREATE_QUEUE (
-queue_name          => '$DATABASE2_QUEUE',
-queue_table         => 'DATABASE2QUEUETABLE');
+queue_name          => '$INVENTORY_QUEUE',
+queue_table         => 'INVENTORYQUEUETABLE');
 
 DBMS_AQADM.START_QUEUE (
-queue_name          => '$DATABASE2_QUEUE');
+queue_name          => '$INVENTORY_QUEUE');
 END;
 /
 !
-  state_set_done DATABASE1_USER
+  state_set_done ORDER_USER
 done
 
 
-# Wait for DB Password to be set in database2 DB
-while ! state_done DATABASE2_DB_PASSWORD_SET; do
-  echo "`date`: Waiting for DATABASE2_DB_PASSWORD_SET"
+# Wait for DB Password to be set in Inventory DB
+while ! state_done INVENTORY_DB_PASSWORD_SET; do
+  echo "`date`: Waiting for INVENTORY_DB_PASSWORD_SET"
   sleep 2
 done
 
 
-# database2 DB User, Objects
-while ! state_done DATABASE2_USER; do
-  U=$DATABASE2_USER
-  SVC=$DATABASE2_DB_SVC
+# Inventory DB User, Objects
+while ! state_done INVENTORY_USER; do
+  U=$INVENTORY_USER
+  SVC=$INVENTORY_DB_SVC
   sqlplus /nolog <<!
 WHENEVER SQLERROR EXIT 1
 connect admin/"$DB_PASSWORD"@$SVC
@@ -214,57 +214,57 @@ connect $U/"$DB_PASSWORD"@$SVC
 
 BEGIN
 DBMS_AQADM.CREATE_QUEUE_TABLE (
-queue_table          => 'DATABASE1QUEUETABLE',
+queue_table          => 'ORDERQUEUETABLE',
 queue_payload_type   => 'SYS.AQ\$_JMS_TEXT_MESSAGE',
 compatible           => '8.1');
 
 DBMS_AQADM.CREATE_QUEUE (
-queue_name          => '$DATABASE1_QUEUE',
-queue_table         => 'DATABASE1QUEUETABLE');
+queue_name          => '$ORDER_QUEUE',
+queue_table         => 'ORDERQUEUETABLE');
 
 DBMS_AQADM.START_QUEUE (
-queue_name          => '$DATABASE1_QUEUE');
+queue_name          => '$ORDER_QUEUE');
 END;
 /
 
 BEGIN
 DBMS_AQADM.CREATE_QUEUE_TABLE (
-queue_table          => 'DATABASE2QUEUETABLE',
+queue_table          => 'INVENTORYQUEUETABLE',
 queue_payload_type   => 'SYS.AQ\$_JMS_TEXT_MESSAGE',
 multiple_consumers   => true,
 compatible           => '8.1');
 
 DBMS_AQADM.CREATE_QUEUE (
-queue_name          => '$DATABASE2_QUEUE',
-queue_table         => 'DATABASE2QUEUETABLE');
+queue_name          => '$INVENTORY_QUEUE',
+queue_table         => 'INVENTORYQUEUETABLE');
 
 DBMS_AQADM.START_QUEUE (
-queue_name          => '$DATABASE2_QUEUE');
+queue_name          => '$INVENTORY_QUEUE');
 END;
 /
 
-create table database2 (
+create table inventory (
   inventoryid varchar(16) PRIMARY KEY NOT NULL,
   inventorylocation varchar(32),
   inventorycount integer CONSTRAINT positive_inventory CHECK (inventorycount >= 0) );
 
-insert into database2 values ('sushi', '1468 WEBSTER ST,San Francisco,CA', 0);
-insert into database2 values ('pizza', '1469 WEBSTER ST,San Francisco,CA', 0);
-insert into database2 values ('burger', '1470 WEBSTER ST,San Francisco,CA', 0);
+insert into inventory values ('sushi', '1468 WEBSTER ST,San Francisco,CA', 0);
+insert into inventory values ('pizza', '1469 WEBSTER ST,San Francisco,CA', 0);
+insert into inventory values ('burger', '1470 WEBSTER ST,San Francisco,CA', 0);
 commit;
 !
-  state_set_done DATABASE2_USER
+  state_set_done INVENTORY_USER
 done
 
 
-# DATABASE1 DB Link
-while ! state_done DATABASE1_DB_LINK; do
-  U=$DATABASE1_USER
-  SVC=$DATABASE1_DB_SVC
-  TU=$DATABASE2_USER
-  TSVC=$DATABASE2_DB_SVC
+# Order DB Link
+while ! state_done ORDER_DB_LINK; do
+  U=$ORDER_USER
+  SVC=$ORDER_DB_SVC
+  TU=$INVENTORY_USER
+  TSVC=$INVENTORY_DB_SVC
   TTNS=`grep -i "^$TSVC " $TNS_ADMIN/tnsnames.ora`
-  LINK=$DATABASE1_LINK
+  LINK=$ORDER_LINK
   sqlplus /nolog <<!
 WHENEVER SQLERROR EXIT 1
 connect $U/"$DB_PASSWORD"@$SVC
@@ -289,17 +289,17 @@ BEGIN
 END;
 /
 !
-  state_set_done DATABASE1_DB_LINK
+  state_set_done ORDER_DB_LINK
 done
 
-# database2 DB Link
-while ! state_done DATABASE2_DB_LINK; do
-  U=$DATABASE2_USER
-  SVC=$DATABASE2_DB_SVC
-  TU=$DATABASE1_USER
-  TSVC=$DATABASE1_DB_SVC
+# Inventory DB Link
+while ! state_done INVENTORY_DB_LINK; do
+  U=$INVENTORY_USER
+  SVC=$INVENTORY_DB_SVC
+  TU=$ORDER_USER
+  TSVC=$ORDER_DB_SVC
   TTNS=`grep -i "^$TSVC " $TNS_ADMIN/tnsnames.ora`
-  LINK=$DATABASE2_LINK
+  LINK=$INVENTORY_LINK
   sqlplus /nolog <<!
 WHENEVER SQLERROR EXIT 1
 connect $U/"$DB_PASSWORD"@$SVC
@@ -324,18 +324,18 @@ BEGIN
 END;
 /
 !
-  state_set_done DATABASE2_DB_LINK
+  state_set_done INVENTORY_DB_LINK
 done
 
 
-# DATABASE1 Queues and Propagation
-while ! state_done DATABASE1_PROPAGATION; do
-  U=$DATABASE1_USER
-  SVC=$DATABASE1_DB_SVC
-  TU=$DATABASE2_USER
-  TSVC=$DATABASE2_DB_SVC
-  LINK=$DATABASE1_LINK
-  Q=$DATABASE1_QUEUE
+# Order Queues and Propagation
+while ! state_done ORDER_PROPAGATION; do
+  U=$ORDER_USER
+  SVC=$ORDER_DB_SVC
+  TU=$INVENTORY_USER
+  TSVC=$INVENTORY_DB_SVC
+  LINK=$ORDER_LINK
+  Q=$ORDER_QUEUE
   sqlplus /nolog <<!
 WHENEVER SQLERROR EXIT 1
 connect $U/"$DB_PASSWORD"@$SVC
@@ -358,18 +358,18 @@ dbms_aqadm.schedule_propagation
 END;
 /
 !
-  state_set_done DATABASE1_PROPAGATION
+  state_set_done ORDER_PROPAGATION
 done
 
 
-# DATABASE2 Queues and Propagation
-while ! state_done DATABASE2_PROPAGATION; do
-  U=$DATABASE2_USER
-  SVC=$DATABASE2_DB_SVC
-  TU=$DATABASE1_USER
-  TSVC=$DATABASE1_DB_SVC
-  LINK=$DATABASE2_LINK
-  Q=$DATABASE2_QUEUE
+# Inventory Queues and Propagation
+while ! state_done INVENTORY_PROPAGATION; do
+  U=$INVENTORY_USER
+  SVC=$INVENTORY_DB_SVC
+  TU=$ORDER_USER
+  TSVC=$ORDER_DB_SVC
+  LINK=$INVENTORY_LINK
+  Q=$INVENTORY_QUEUE
   sqlplus /nolog <<!
 WHENEVER SQLERROR EXIT 1
 connect $U/"$DB_PASSWORD"@$SVC
@@ -392,20 +392,20 @@ dbms_aqadm.schedule_propagation
 END;
 /
 !
-  state_set_done DATABASE2_PROPAGATION
+  state_set_done INVENTORY_PROPAGATION
 done
 
 
-# .net database2 DB Proc
-while ! state_done DOT_NET_DATABASE2_DB_PROC; do
-  U=$DATABASE2_USER
-  SVC=$DATABASE2_DB_SVC
+# .net Inventory DB Proc
+while ! state_done DOT_NET_INVENTORY_DB_PROC; do
+  U=$INVENTORY_USER
+  SVC=$INVENTORY_DB_SVC
   sqlplus /nolog <<!
 WHENEVER SQLERROR EXIT 1
 connect $U/"$DB_PASSWORD"@$SVC
-@$GRABDISH_HOME/database2-dotnet/dequeueenqueue.sql
+@$GRABDISH_HOME/inventory-dotnet/dequeueenqueue.sql
 !
-  state_set_done DOT_NET_DATABASE2_DB_PROC
+  state_set_done DOT_NET_INVENTORY_DB_PROC
 done
 
 

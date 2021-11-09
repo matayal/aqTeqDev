@@ -30,8 +30,8 @@ while ! state_done RUN_TYPE; do
     state_set_done PROVISIONING
     state_set_done K8S_PROVISIONING
     state_set RUN_NAME "grabdish$(state_get RESERVATION_ID)"
-    state_set DATABASE1_DB_NAME "DATABASE1$(state_get RESERVATION_ID)"
-    state_set DATABASE2_DB_NAME "DATABASE2$(state_get RESERVATION_ID)"
+    state_set ORDER_DB_NAME "ORDER$(state_get RESERVATION_ID)"
+    state_set INVENTORY_DB_NAME "INVENTORY$(state_get RESERVATION_ID)"
     state_set_done OKE_LIMIT_CHECK
     state_set_done ATP_LIMIT_CHECK
   else
@@ -81,14 +81,14 @@ while ! state_done RUN_NAME; do
     echo "ERROR: The workshop is not installed in a separate folder."
     exit
   fi
-  DN="grabdish"
+  DN=`basename "$PWD"`
   # Validate run name.  Must be between 1 and 13 characters, only letters or numbers, starting with letter
   if [[ "$DN" =~ ^[a-zA-Z][a-zA-Z0-9]{0,12}$ ]]; then
     state_set RUN_NAME `echo "$DN" | awk '{print tolower($0)}'`
-    state_set DATABASE1_DB_NAME "$(state_get RUN_NAME)o"
-    state_set DATABASE2_DB_NAME "$(state_get RUN_NAME)i"
+    state_set ORDER_DB_NAME "$(state_get RUN_NAME)o"
+    state_set INVENTORY_DB_NAME "$(state_get RUN_NAME)i"
   else
-    echo "Error: Invalid directory name $DN.  The directory name must be between 1 and 13 characters,"
+    echo "Error: Invalid directory name $RN.  The directory name must be between 1 and 13 characters,"
     echo "containing only letters or numbers, starting with a letter.  Please restart the workshop with a valid directory name."
     exit
   fi
@@ -282,7 +282,7 @@ if ! state_done DB_PASSWORD; then
 
   while true; do
     if test -z "$TEST_DB_PASSWORD"; then
-      read -s -r -p "Enter the password to be used for the DATABASE1 and DATABASE2 databases: " PW
+      read -s -r -p "Enter the password to be used for the order and inventory databases: " PW
     else
       PW="$TEST_DB_PASSWORD"
     fi
@@ -332,25 +332,25 @@ if ! state_done PROVISIONING; then
 fi
 
 
-# Get DATABASE1 DB OCID
-while ! state_done DATABASE1_DB_OCID; do
-  DATABASE1_DB_OCID=`oci db autonomous-database list --compartment-id "$(cat state/COMPARTMENT_OCID)" --query 'join('"' '"',data[?"display-name"=='"'DATABASE1DB'"'].id)' --raw-output`
-  if [[ "$DATABASE1_DB_OCID" =~ ocid1.autonomousdatabase* ]]; then
-    state_set DATABASE1_DB_OCID "$DATABASE1_DB_OCID"
+# Get Order DB OCID
+while ! state_done ORDER_DB_OCID; do
+  ORDER_DB_OCID=`oci db autonomous-database list --compartment-id "$(cat state/COMPARTMENT_OCID)" --query 'join('"' '"',data[?"display-name"=='"'ORDERDB'"'].id)' --raw-output`
+  if [[ "$ORDER_DB_OCID" =~ ocid1.autonomousdatabase* ]]; then
+    state_set ORDER_DB_OCID "$ORDER_DB_OCID"
   else
-    echo "ERROR: Incorrect DATABASE1 DB OCID: $DATABASE1_DB_OCID"
+    echo "ERROR: Incorrect Order DB OCID: $ORDER_DB_OCID"
     exit
   fi
 done
 
 
-# Get DATABASE2 DB OCID
-while ! state_done DATABASE2_DB_OCID; do
-  DATABASE2_DB_OCID=`oci db autonomous-database list --compartment-id "$(cat state/COMPARTMENT_OCID)" --query 'join('"' '"',data[?"display-name"=='"'DATABASE2DB'"'].id)' --raw-output`
-  if [[ "$DATABASE2_DB_OCID" =~ ocid1.autonomousdatabase* ]]; then
-    state_set DATABASE2_DB_OCID "$DATABASE2_DB_OCID"
+# Get Inventory DB OCID
+while ! state_done INVENTORY_DB_OCID; do
+  INVENTORY_DB_OCID=`oci db autonomous-database list --compartment-id "$(cat state/COMPARTMENT_OCID)" --query 'join('"' '"',data[?"display-name"=='"'INVENTORYDB'"'].id)' --raw-output`
+  if [[ "$INVENTORY_DB_OCID" =~ ocid1.autonomousdatabase* ]]; then
+    state_set INVENTORY_DB_OCID "$INVENTORY_DB_OCID"
   else
-    echo "ERROR: Incorrect DATABASE2 DB OCID: $DATABASE2_DB_OCID"
+    echo "ERROR: Incorrect Inventory DB OCID: $INVENTORY_DB_OCID"
     exit
   fi
 done
@@ -393,30 +393,30 @@ while ! state_done DB_PASSWORD; do
 done
 
 
-# Set admin password in DATABASE1 database
-while ! state_done DATABASE1_DB_PASSWORD_SET; do
+# Set admin password in order database
+while ! state_done ORDER_DB_PASSWORD_SET; do
   # get password from vault secret
   DB_PASSWORD=`kubectl get secret dbuser -n msdataworkshop --template={{.data.dbpassword}} | base64 --decode`
   umask 177
   echo '{"adminPassword": "'"$DB_PASSWORD"'"}' > temp_params
   umask 22
-  oci db autonomous-database update --autonomous-database-id "$(state_get DATABASE1_DB_OCID)" --from-json "file://temp_params" >/dev/null
+  oci db autonomous-database update --autonomous-database-id "$(state_get ORDER_DB_OCID)" --from-json "file://temp_params" >/dev/null
   rm temp_params
-  state_set_done DATABASE1_DB_PASSWORD_SET
+  state_set_done ORDER_DB_PASSWORD_SET
 done
 
 
-# Set admin password in DATABASE2 database
-while ! state_done DATABASE2_DB_PASSWORD_SET; do
+# Set admin password in inventory database
+while ! state_done INVENTORY_DB_PASSWORD_SET; do
   # get password from vault secret
   DB_PASSWORD=`kubectl get secret dbuser -n msdataworkshop --template={{.data.dbpassword}} | base64 --decode`
   umask 177
   echo '{"adminPassword": "'"$DB_PASSWORD"'"}' > temp_params
   umask 22
 
-  oci db autonomous-database update --autonomous-database-id "$(state_get DATABASE2_DB_OCID)" --from-json "file://temp_params" >/dev/null
+  oci db autonomous-database update --autonomous-database-id "$(state_get INVENTORY_DB_OCID)" --from-json "file://temp_params" >/dev/null
   rm temp_params
-  state_set_done DATABASE2_DB_PASSWORD_SET
+  state_set_done INVENTORY_DB_PASSWORD_SET
 done
 
 # Wait for OKE Setup
