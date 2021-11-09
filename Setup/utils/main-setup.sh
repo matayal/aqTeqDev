@@ -6,8 +6,8 @@
 set -e
 
 # Check home is set
-if test -z "$GRABDISH_HOME"; then
-  echo "ERROR: This script requires GRABDISH_HOME to be set"
+if test -z "$SETUP_HOME"; then
+  echo "ERROR: This script requires SETUP_HOME to be set"
   exit
 fi
 
@@ -29,9 +29,9 @@ while ! state_done RUN_TYPE; do
     state_set USER_NAME "LL$(state_get RESERVATION_ID)-USER"
     state_set_done PROVISIONING
     state_set_done K8S_PROVISIONING
-    state_set RUN_NAME "grabdish$(state_get RESERVATION_ID)"
-    state_set ORDER_DB_NAME "ORDER$(state_get RESERVATION_ID)"
-    state_set INVENTORY_DB_NAME "INVENTORY$(state_get RESERVATION_ID)"
+    state_set RUN_NAME "Setup$(state_get RESERVATION_ID)"
+    state_set DATABASE1_DB_NAME "DATABASE1$(state_get RESERVATION_ID)"
+    state_set DATABASE2_DB_NAME "DATABASE2$(state_get RESERVATION_ID)"
     state_set_done OKE_LIMIT_CHECK
     state_set_done ATP_LIMIT_CHECK
   else
@@ -56,11 +56,11 @@ while ! state_done USER_OCID; do
     USER_OCID=$TEST_USER_OCID
   fi
   # Validate
-  if test ""`oci iam user get --user-id "$USER_OCID" --query 'data."lifecycle-state"' --raw-output 2>$GRABDISH_LOG/user_ocid_err` == 'ACTIVE'; then
+  if test ""`oci iam user get --user-id "$USER_OCID" --query 'data."lifecycle-state"' --raw-output 2>$SETUP_LOG/user_ocid_err` == 'ACTIVE'; then
     state_set USER_OCID "$USER_OCID"
   else
     echo "That user OCID could not be validated"
-    cat $GRABDISH_LOG/user_ocid_err
+    cat $SETUP_LOG/user_ocid_err
   fi
 done
 
@@ -74,7 +74,7 @@ done
 
 # Get Run Name from directory name
 while ! state_done RUN_NAME; do
-  cd $GRABDISH_HOME
+  cd $SETUP_HOME
   cd ../..
   # Validate that a folder was creared
   if test "$PWD" == ~; then
@@ -85,14 +85,14 @@ while ! state_done RUN_NAME; do
   # Validate run name.  Must be between 1 and 13 characters, only letters or numbers, starting with letter
   if [[ "$DN" =~ ^[a-zA-Z][a-zA-Z0-9]{0,12}$ ]]; then
     state_set RUN_NAME `echo "$DN" | awk '{print tolower($0)}'`
-    state_set ORDER_DB_NAME "$(state_get RUN_NAME)o"
-    state_set INVENTORY_DB_NAME "$(state_get RUN_NAME)i"
+    state_set DATABASE1_DB_NAME "$(state_get RUN_NAME)o"
+    state_set DATABASE2_DB_NAME "$(state_get RUN_NAME)i"
   else
     echo "Error: Invalid directory name $RN.  The directory name must be between 1 and 13 characters,"
     echo "containing only letters or numbers, starting with a letter.  Please restart the workshop with a valid directory name."
     exit
   fi
-  cd $GRABDISH_HOME
+  cd $SETUP_HOME
 done
 
 
@@ -117,7 +117,7 @@ while ! state_done COMPARTMENT_OCID; do
   if test $(state_get RUN_TYPE) -ne 3; then
     echo "Resources will be created in a new compartment named $(state_get RUN_NAME)"
     export OCI_CLI_PROFILE=$(state_get HOME_REGION)
-    COMPARTMENT_OCID=`oci iam compartment create --compartment-id "$(state_get TENANCY_OCID)" --name "$(state_get RUN_NAME)" --description "GrabDish Workshop" --query 'data.id' --raw-output`
+    COMPARTMENT_OCID=`oci iam compartment create --compartment-id "$(state_get TENANCY_OCID)" --name "$(state_get RUN_NAME)" --description "Setup Workshop" --query 'data.id' --raw-output`
     export OCI_CLI_PROFILE=$(state_get REGION)
   else
     read -p "Please enter your OCI compartment's OCID: " COMPARTMENT_OCID
@@ -132,22 +132,22 @@ done
 
 ## Run the java-builds.sh in the background
 if ! state_get JAVA_BUILDS; then
-  if ps -ef | grep "$GRABDISH_HOME/utils/java-builds.sh" | grep -v grep; then
-    echo "$GRABDISH_HOME/utils/java-builds.sh is already running"
+  if ps -ef | grep "$SETUP_HOME/utils/java-builds.sh" | grep -v grep; then
+    echo "$SETUP_HOME/utils/java-builds.sh is already running"
   else
     echo "Executing java-builds.sh in the background"
-    nohup $GRABDISH_HOME/utils/java-builds.sh &>> $GRABDISH_LOG/java-builds.log &
+    nohup $SETUP_HOME/utils/java-builds.sh &>> $SETUP_LOG/java-builds.log &
   fi
 fi
 
 
 # Run the non-java-builds.sh in the background
 if ! state_get NON_JAVA_BUILDS; then
-  if ps -ef | grep "$GRABDISH_HOME/utils/non-java-builds.sh" | grep -v grep; then
-    echo "$GRABDISH_HOME/utils/non-java-builds.sh is already running"
+  if ps -ef | grep "$SETUP_HOME/utils/non-java-builds.sh" | grep -v grep; then
+    echo "$SETUP_HOME/utils/non-java-builds.sh is already running"
   else
     echo "Executing non-java-builds.sh in the background"
-    nohup $GRABDISH_HOME/utils/non-java-builds.sh &>> $GRABDISH_LOG/non-java-builds.log &
+    nohup $SETUP_HOME/utils/non-java-builds.sh &>> $SETUP_LOG/non-java-builds.log &
   fi
 fi
 
@@ -196,11 +196,11 @@ done
 
 ## Run the terraform.sh in the background
 if ! state_get PROVISIONING; then
-  if ps -ef | grep "$GRABDISH_HOME/utils/terraform.sh" | grep -v grep; then
-    echo "$GRABDISH_HOME/utils/terraform.sh is already running"
+  if ps -ef | grep "$SETUP_HOME/utils/terraform.sh" | grep -v grep; then
+    echo "$SETUP_HOME/utils/terraform.sh is already running"
   else
     echo "Executing terraform.sh in the background"
-    nohup $GRABDISH_HOME/utils/terraform.sh &>> $GRABDISH_LOG/terraform.log &
+    nohup $SETUP_HOME/utils/terraform.sh &>> $SETUP_LOG/terraform.log &
   fi
 fi
 
@@ -216,15 +216,15 @@ done
 while ! state_done DOCKER_REGISTRY; do
   if test $(state_get RUN_TYPE) -ne 3; then
     export OCI_CLI_PROFILE=$(state_get HOME_REGION)
-    if ! TOKEN=`oci iam auth-token create  --user-id "$(state_get USER_OCID)" --description 'grabdish docker login' --query 'data.token' --raw-output 2>$GRABDISH_LOG/docker_registry_err`; then
-      if grep UserCapacityExceeded $GRABDISH_LOG/docker_registry_err >/dev/null; then
+    if ! TOKEN=`oci iam auth-token create  --user-id "$(state_get USER_OCID)" --description 'Setup docker login' --query 'data.token' --raw-output 2>$SETUP_LOG/docker_registry_err`; then
+      if grep UserCapacityExceeded $SETUP_LOG/docker_registry_err >/dev/null; then
         # The key already exists
         echo 'ERROR: Failed to create auth token.  Please delete an old token from the OCI Console (Profile -> User Settings -> Auth Tokens).'
         read -p "Hit return when you are ready to retry?"
         continue
       else
         echo "ERROR: Creating auth token had failed:"
-        cat $GRABDISH_LOG/docker_registry_err
+        cat $SETUP_LOG/docker_registry_err
         exit
       fi
     fi
@@ -252,22 +252,22 @@ done
 
 # run oke-setup.sh in background
 if ! state_get OKE_SETUP; then
-  if ps -ef | grep "$GRABDISH_HOME/utils/oke-setup.sh" | grep -v grep; then
-    echo "$GRABDISH_HOME/utils/oke-setup.sh is already running"
+  if ps -ef | grep "$SETUP_HOME/utils/oke-setup.sh" | grep -v grep; then
+    echo "$SETUP_HOME/utils/oke-setup.sh is already running"
   else
     echo "Executing oke-setup.sh in the background"
-    nohup $GRABDISH_HOME/utils/oke-setup.sh &>>$GRABDISH_LOG/oke-setup.log &
+    nohup $SETUP_HOME/utils/oke-setup.sh &>>$SETUP_LOG/oke-setup.log &
   fi
 fi
 
 
 # run db-setup.sh in background
 if ! state_get DB_SETUP; then
-  if ps -ef | grep "$GRABDISH_HOME/utils/db-setup.sh" | grep -v grep; then
-    echo "$GRABDISH_HOME/utils/db-setup.sh is already running"
+  if ps -ef | grep "$SETUP_HOME/utils/db-setup.sh" | grep -v grep; then
+    echo "$SETUP_HOME/utils/db-setup.sh is already running"
   else
     echo "Executing db-setup.sh in the background"
-    nohup $GRABDISH_HOME/utils/db-setup.sh &>>$GRABDISH_LOG/db-setup.log &
+    nohup $SETUP_HOME/utils/db-setup.sh &>>$SETUP_LOG/db-setup.log &
   fi
 fi
 
@@ -282,7 +282,7 @@ if ! state_done DB_PASSWORD; then
 
   while true; do
     if test -z "$TEST_DB_PASSWORD"; then
-      read -s -r -p "Enter the password to be used for the order and inventory databases: " PW
+      read -s -r -p "Enter the password to be used for the DATABASE1 and DATABASE2 databases: " PW
     else
       PW="$TEST_DB_PASSWORD"
     fi
@@ -324,7 +324,7 @@ fi
 if ! state_done PROVISIONING; then
   echo "`date`: Waiting for terraform provisioning"
   while ! state_done PROVISIONING; do
-    LOGLINE=`tail -1 $GRABDISH_LOG/terraform.log`
+    LOGLINE=`tail -1 $SETUP_LOG/terraform.log`
     echo -ne r"\033[2K\r${LOGLINE:0:120}"
     sleep 2
   done
@@ -332,25 +332,25 @@ if ! state_done PROVISIONING; then
 fi
 
 
-# Get Order DB OCID
-while ! state_done ORDER_DB_OCID; do
-  ORDER_DB_OCID=`oci db autonomous-database list --compartment-id "$(cat state/COMPARTMENT_OCID)" --query 'join('"' '"',data[?"display-name"=='"'ORDERDB'"'].id)' --raw-output`
-  if [[ "$ORDER_DB_OCID" =~ ocid1.autonomousdatabase* ]]; then
-    state_set ORDER_DB_OCID "$ORDER_DB_OCID"
+# Get DATABASE1 DB OCID
+while ! state_done DATABASE1_DB_OCID; do
+  DATABASE1_DB_OCID=`oci db autonomous-database list --compartment-id "$(cat state/COMPARTMENT_OCID)" --query 'join('"' '"',data[?"display-name"=='"'DATABASE1DB'"'].id)' --raw-output`
+  if [[ "$DATABASE1_DB_OCID" =~ ocid1.autonomousdatabase* ]]; then
+    state_set DATABASE1_DB_OCID "$DATABASE1_DB_OCID"
   else
-    echo "ERROR: Incorrect Order DB OCID: $ORDER_DB_OCID"
+    echo "ERROR: Incorrect DATABASE1 DB OCID: $DATABASE1_DB_OCID"
     exit
   fi
 done
 
 
-# Get Inventory DB OCID
-while ! state_done INVENTORY_DB_OCID; do
-  INVENTORY_DB_OCID=`oci db autonomous-database list --compartment-id "$(cat state/COMPARTMENT_OCID)" --query 'join('"' '"',data[?"display-name"=='"'INVENTORYDB'"'].id)' --raw-output`
-  if [[ "$INVENTORY_DB_OCID" =~ ocid1.autonomousdatabase* ]]; then
-    state_set INVENTORY_DB_OCID "$INVENTORY_DB_OCID"
+# Get DATABASE2 DB OCID
+while ! state_done DATABASE2_DB_OCID; do
+  DATABASE2_DB_OCID=`oci db autonomous-database list --compartment-id "$(cat state/COMPARTMENT_OCID)" --query 'join('"' '"',data[?"display-name"=='"'DATABASE2DB'"'].id)' --raw-output`
+  if [[ "$DATABASE2_DB_OCID" =~ ocid1.autonomousdatabase* ]]; then
+    state_set DATABASE2_DB_OCID "$DATABASE2_DB_OCID"
   else
-    echo "ERROR: Incorrect Inventory DB OCID: $INVENTORY_DB_OCID"
+    echo "ERROR: Incorrect DATABASE2 DB OCID: $DATABASE2_DB_OCID"
     exit
   fi
 done
@@ -360,7 +360,7 @@ done
 if ! state_done OKE_NAMESPACE; then
   echo "`date`: Waiting for kubectl configuration and msdataworkshop namespace"
   while ! state_done OKE_NAMESPACE; do
-    LOGLINE=`tail -1 $GRABDISH_LOG/state.log`
+    LOGLINE=`tail -1 $SETUP_LOG/state.log`
     echo -ne r"\033[2K\r${LOGLINE:0:120}"
     sleep 2
   done
@@ -393,30 +393,30 @@ while ! state_done DB_PASSWORD; do
 done
 
 
-# Set admin password in order database
-while ! state_done ORDER_DB_PASSWORD_SET; do
+# Set admin password in DATABASE1 database
+while ! state_done DATABASE1_DB_PASSWORD_SET; do
   # get password from vault secret
   DB_PASSWORD=`kubectl get secret dbuser -n msdataworkshop --template={{.data.dbpassword}} | base64 --decode`
   umask 177
   echo '{"adminPassword": "'"$DB_PASSWORD"'"}' > temp_params
   umask 22
-  oci db autonomous-database update --autonomous-database-id "$(state_get ORDER_DB_OCID)" --from-json "file://temp_params" >/dev/null
+  oci db autonomous-database update --autonomous-database-id "$(state_get DATABASE1_DB_OCID)" --from-json "file://temp_params" >/dev/null
   rm temp_params
-  state_set_done ORDER_DB_PASSWORD_SET
+  state_set_done DATABASE1_DB_PASSWORD_SET
 done
 
 
-# Set admin password in inventory database
-while ! state_done INVENTORY_DB_PASSWORD_SET; do
+# Set admin password in DATABASE2 database
+while ! state_done DATABASE2_DB_PASSWORD_SET; do
   # get password from vault secret
   DB_PASSWORD=`kubectl get secret dbuser -n msdataworkshop --template={{.data.dbpassword}} | base64 --decode`
   umask 177
   echo '{"adminPassword": "'"$DB_PASSWORD"'"}' > temp_params
   umask 22
 
-  oci db autonomous-database update --autonomous-database-id "$(state_get INVENTORY_DB_OCID)" --from-json "file://temp_params" >/dev/null
+  oci db autonomous-database update --autonomous-database-id "$(state_get DATABASE2_DB_OCID)" --from-json "file://temp_params" >/dev/null
   rm temp_params
-  state_set_done INVENTORY_DB_PASSWORD_SET
+  state_set_done DATABASE2_DB_PASSWORD_SET
 done
 
 # Wait for OKE Setup
@@ -427,11 +427,11 @@ done
 
 # run ingress-nginx-setup.sh in background
 if ! state_get NGINX_INGRESS_SETUP_DONE; then
-  if ps -ef | grep "$GRABDISH_HOME/ingress/nginx/ingress-nginx-setup.sh" | grep -v grep; then
-    echo "$GRABDISH_HOME/ingress/nginx/ingress-nginx-setup.sh is already running"
+  if ps -ef | grep "$SETUP_HOME/ingress/nginx/ingress-nginx-setup.sh" | grep -v grep; then
+    echo "$SETUP_HOME/ingress/nginx/ingress-nginx-setup.sh is already running"
   else
     echo "Executing ingress-nginx-setup.sh in the background"
-    nohup $GRABDISH_HOME/ingress/nginx/ingress-nginx-setup.sh &>>$GRABDISH_LOG/ingress-nginx-setup.log &
+    nohup $SETUP_HOME/ingress/nginx/ingress-nginx-setup.sh &>>$SETUP_LOG/ingress-nginx-setup.log &
   fi
 fi
 
@@ -467,7 +467,7 @@ while ! state_done UI_PASSWORD; do
 done
 
 
-ps -ef | grep "$GRABDISH_HOME/utils" | grep -v grep
+ps -ef | grep "$SETUP_HOME/utils" | grep -v grep
 
 
 # Verify Setup
@@ -486,7 +486,7 @@ while ! state_done SETUP_VERIFIED; do
     fi
   done
   if test "$NOT_DONE" -gt 0; then
-    # echo "Log files are located in $GRABDISH_LOG"
+    # echo "Log files are located in $SETUP_LOG"
     bgs=$bg_not_done
     echo -ne r"\033[2K\r$bgs still running "
     sleep 10
@@ -496,6 +496,6 @@ while ! state_done SETUP_VERIFIED; do
 done
 
 # Export state file for local development
-cd $GRABDISH_HOME
-rm -f ~/grabdish-state.tgz
-tar -czf ~/grabdish-state.tgz state
+cd $SETUP_HOME
+rm -f ~/Setup-state.tgz
+tar -czf ~/Setup-state.tgz state
