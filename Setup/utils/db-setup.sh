@@ -29,28 +29,28 @@ done
 
 # Get Wallet
 while ! state_done WALLET_GET; do
-  cd $GRABDISH_HOME
+  cd $SETUP_HOME
   mkdir wallet
   cd wallet
   oci db autonomous-database generate-wallet --autonomous-database-id "$(state_get DATABASE1_DB_OCID)" --file 'wallet.zip' --password 'Welcome1' --generate-type 'ALL'
   unzip wallet.zip
-  cd $GRABDISH_HOME
+  cd $SETUP_HOME
   state_set_done WALLET_GET
 done
 
 
 # Get DB Connection Wallet and to Object Store
 while ! state_done CWALLET_SSO_OBJECT; do
-  cd $GRABDISH_HOME/wallet
+  cd $SETUP_HOME/wallet
   oci os object put --bucket-name "$(state_get RUN_NAME)" --name "cwallet.sso" --file 'cwallet.sso'
-  cd $GRABDISH_HOME
+  cd $SETUP_HOME
   state_set_done CWALLET_SSO_OBJECT
 done
 
 
 # Create Authenticated Link to Wallet
 while ! state_done CWALLET_SSO_AUTH_URL; do
-  ACCESS_URI=`oci os preauth-request create --object-name 'cwallet.sso' --access-type 'ObjectRead' --bucket-name "$(state_get RUN_NAME)" --name 'grabdish' --time-expires $(date '+%Y-%m-%d' --date '+7 days') --query 'data."access-uri"' --raw-output`
+  ACCESS_URI=`oci os preauth-request create --object-name 'cwallet.sso' --access-type 'ObjectRead' --bucket-name "$(state_get RUN_NAME)" --name 'setup' --time-expires $(date '+%Y-%m-%d' --date '+7 days') --query 'data."access-uri"' --raw-output`
   state_set CWALLET_SSO_AUTH_URL "https://objectstorage.$(state_get REGION).oraclecloud.com${ACCESS_URI}"
 done
 
@@ -64,7 +64,7 @@ done
 
 # Create DATABASE2 ATP Bindings
 while ! state_done DB_WALLET_SECRET; do
-  cd $GRABDISH_HOME/wallet
+  cd $SETUP_HOME/wallet
   cat - >sqlnet.ora <<!
 WALLET_LOCATION = (SOURCE = (METHOD = file) (METHOD_DATA = (DIRECTORY="/msdataworkshop/creds")))
 SSL_SERVER_DN_MATCH=yes
@@ -89,12 +89,12 @@ kind: Secret
 metadata:
   name: db-wallet-secret
 !
-  cd $GRABDISH_HOME
+  cd $SETUP_HOME
 done
 
 
 # DB Connection Setup
-export TNS_ADMIN=$GRABDISH_HOME/wallet
+export TNS_ADMIN=$SETUP_HOME/wallet
 cat - >$TNS_ADMIN/sqlnet.ora <<!
 WALLET_LOCATION = (SOURCE = (METHOD = file) (METHOD_DATA = (DIRECTORY="$TNS_ADMIN")))
 SSL_SERVER_DN_MATCH=yes
@@ -403,7 +403,7 @@ while ! state_done DOT_NET_DATABASE2_DB_PROC; do
   sqlplus /nolog <<!
 WHENEVER SQLERROR EXIT 1
 connect $U/"$DB_PASSWORD"@$SVC
-@$GRABDISH_HOME/DATABASE2-dotnet/dequeueenqueue.sql
+@$SETUP_HOME/DATABASE2-dotnet/dequeueenqueue.sql
 !
   state_set_done DOT_NET_DATABASE2_DB_PROC
 done
