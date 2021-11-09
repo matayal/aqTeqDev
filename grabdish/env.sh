@@ -17,10 +17,10 @@ function sed_i(){
 }
 export -f sed_i
 
-# Set SETUP_HOME
-export SETUP_HOME="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-cd $SETUP_HOME
-echo "SETUP_HOME: $SETUP_HOME"
+# Set GRABDISH_HOME
+export GRABDISH_HOME="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+cd $GRABDISH_HOME
+echo "GRABDISH_HOME: $GRABDISH_HOME"
 
 # Java Home
 if test -d ~/graalvm-ce-java11-20.1.0/Contents/Home/bin; then
@@ -33,18 +33,18 @@ fi
 export PATH=$JAVA_HOME/bin:$PATH
 
 # State directory
-if test -d ~/setup-state; then
-  export SETUP_STATE_HOME=~/setup-state
+if test -d ~/grabdish-state; then
+  export GRABDISH_STATE_HOME=~/grabdish-state
 else
-  export SETUP_STATE_HOME=$SETUP_HOME
+  export GRABDISH_STATE_HOME=$GRABDISH_HOME
 fi
 
 # Log directory
-export SETUP_LOG=$SETUP_STATE_HOME/log
-mkdir -p $SETUP_LOG
+export GRABDISH_LOG=$GRABDISH_STATE_HOME/log
+mkdir -p $GRABDISH_LOG
 
 # Source the state functions
-source $SETUP_HOME/utils/state-functions.sh
+source $GRABDISH_HOME/utils/state-functions.sh
 
 # SHORTCUT ALIASES AND UTILS...
 alias k='kubectl'
@@ -61,4 +61,4 @@ alias servicemonitors='kubectl get servicemonitors --all-namespaces'
 alias configmaps='kubectl get configmaps --all-namespaces'
 alias msdataworkshop='echo deployments... ; deployments|grep msdataworkshop ; echo pods... ; pods|grep msdataworkshop ; echo services... ; services | grep msdataworkshop ; echo secrets... ; secrets|grep msdataworkshop ; echo "other shortcut commands... most can take partial podname as argument, such as [logpod front] or [deletepod order]...  pods  services secrets deployments "'
 
-export PATH=$PATH:$SETUP_HOME/utils/
+export PATH=$PATH:$GRABDISH_HOME/utils/
