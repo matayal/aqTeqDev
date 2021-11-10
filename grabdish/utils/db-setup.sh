@@ -65,16 +65,16 @@ done
 # Create Inventory ATP Bindings
 while ! state_done DB_WALLET_SECRET; do
   cd $GRABDISH_HOME/wallet
-  cat - >sqlnet.ora <<!
+  cat - >sqlnet.ora 
 WALLET_LOCATION = (SOURCE = (METHOD = file) (METHOD_DATA = (DIRECTORY="/msdataworkshop/creds")))
 SSL_SERVER_DN_MATCH=yes
-!
+
   if kubectl create -f - -n msdataworkshop; then
     state_set_done DB_WALLET_SECRET
   else
     echo "Error: Failure to create db-wallet-secret.  Retrying..."
     sleep 5
-  fi <<!
+  fi 
 apiVersion: v1
 data:
   README: $(base64 -w0 README)
@@ -88,17 +88,17 @@ data:
 kind: Secret
 metadata:
   name: db-wallet-secret
-!
+
   cd $GRABDISH_HOME
 done
 
 
 # DB Connection Setup
 export TNS_ADMIN=$GRABDISH_HOME/wallet
-cat - >$TNS_ADMIN/sqlnet.ora <<!
+cat - >$TNS_ADMIN/sqlnet.ora 
 WALLET_LOCATION = (SOURCE = (METHOD = file) (METHOD_DATA = (DIRECTORY="$TNS_ADMIN")))
 SSL_SERVER_DN_MATCH=yes
-!
+
 ORDER_DB_SVC="$(state_get ORDER_DB_NAME)_tp"
 INVENTORY_DB_SVC="$(state_get INVENTORY_DB_NAME)_tp"
 ORDER_USER=ORDERUSER
@@ -132,7 +132,7 @@ done
 while ! state_done ORDER_USER; do
   U=$ORDER_USER
   SVC=$ORDER_DB_SVC
-  sqlplus /nolog <<!
+  sqlplus /nolog 
 WHENEVER SQLERROR EXIT 1
 connect admin/"$DB_PASSWORD"@$SVC
 CREATE USER $U IDENTIFIED BY "$DB_PASSWORD";
@@ -180,7 +180,7 @@ DBMS_AQADM.START_QUEUE (
 queue_name          => '$INVENTORY_QUEUE');
 END;
 /
-!
+
   state_set_done ORDER_USER
 done
 
@@ -196,7 +196,7 @@ done
 while ! state_done INVENTORY_USER; do
   U=$INVENTORY_USER
   SVC=$INVENTORY_DB_SVC
-  sqlplus /nolog <<!
+  sqlplus /nolog 
 WHENEVER SQLERROR EXIT 1
 connect admin/"$DB_PASSWORD"@$SVC
 CREATE USER $U IDENTIFIED BY "$DB_PASSWORD";
@@ -252,7 +252,7 @@ insert into inventory values ('sushi', '1468 WEBSTER ST,San Francisco,CA', 0);
 insert into inventory values ('pizza', '1469 WEBSTER ST,San Francisco,CA', 0);
 insert into inventory values ('burger', '1470 WEBSTER ST,San Francisco,CA', 0);
 commit;
-!
+
   state_set_done INVENTORY_USER
 done
 
@@ -265,7 +265,7 @@ while ! state_done ORDER_DB_LINK; do
   TSVC=$INVENTORY_DB_SVC
   TTNS=`grep -i "^$TSVC " $TNS_ADMIN/tnsnames.ora`
   LINK=$ORDER_LINK
-  sqlplus /nolog <<!
+  sqlplus /nolog 
 WHENEVER SQLERROR EXIT 1
 connect $U/"$DB_PASSWORD"@$SVC
 BEGIN
@@ -288,7 +288,7 @@ BEGIN
     directory_name => 'DATA_PUMP_DIR');
 END;
 /
-!
+
   state_set_done ORDER_DB_LINK
 done
 
@@ -300,7 +300,7 @@ while ! state_done INVENTORY_DB_LINK; do
   TSVC=$ORDER_DB_SVC
   TTNS=`grep -i "^$TSVC " $TNS_ADMIN/tnsnames.ora`
   LINK=$INVENTORY_LINK
-  sqlplus /nolog <<!
+  sqlplus /nolog 
 WHENEVER SQLERROR EXIT 1
 connect $U/"$DB_PASSWORD"@$SVC
 BEGIN
@@ -323,7 +323,7 @@ BEGIN
     directory_name => 'DATA_PUMP_DIR');
 END;
 /
-!
+
   state_set_done INVENTORY_DB_LINK
 done
 
@@ -336,7 +336,7 @@ while ! state_done ORDER_PROPAGATION; do
   TSVC=$INVENTORY_DB_SVC
   LINK=$ORDER_LINK
   Q=$ORDER_QUEUE
-  sqlplus /nolog <<!
+  sqlplus /nolog 
 WHENEVER SQLERROR EXIT 1
 connect $U/"$DB_PASSWORD"@$SVC
 BEGIN
@@ -357,7 +357,7 @@ dbms_aqadm.schedule_propagation
       ,latency           => 0);     --No gap before propagating
 END;
 /
-!
+
   state_set_done ORDER_PROPAGATION
 done
 
@@ -370,7 +370,7 @@ while ! state_done INVENTORY_PROPAGATION; do
   TSVC=$ORDER_DB_SVC
   LINK=$INVENTORY_LINK
   Q=$INVENTORY_QUEUE
-  sqlplus /nolog <<!
+  sqlplus /nolog 
 WHENEVER SQLERROR EXIT 1
 connect $U/"$DB_PASSWORD"@$SVC
 BEGIN
@@ -391,7 +391,7 @@ dbms_aqadm.schedule_propagation
       ,latency           => 0);     --No gap before propagating
 END;
 /
-!
+
   state_set_done INVENTORY_PROPAGATION
 done
 
